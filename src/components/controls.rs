@@ -114,7 +114,7 @@ pub fn Tag(
     let tone_class = match tone {
         TagTone::Neutral => uno!("bg-surface-sunken text-ink-secondary"),
         TagTone::Accent => uno!("bg-accent-soft text-ink-accent"),
-        TagTone::Trust => uno!("bg-trust-soft text-trust"),
+        TagTone::Trust => uno!("bg-trust-soft text-ink-accent"),
         TagTone::Patina => "bg-[var(--color-project-patina)]/15 text-[var(--color-project-patina-ink)]".to_string(),
         TagTone::Ec => "bg-[var(--color-project-ec)]/15 text-[var(--color-project-ec-ink)]".to_string(),
         TagTone::Services => {
