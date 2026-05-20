@@ -192,6 +192,15 @@ pub fn App() -> impl IntoView {
                             <Route path=path!("/team-patina") view=TeamPatina />
                             <Route path=path!("/team-ec") view=TeamEC />
                             <Route path=path!("/team-ec-services") view=TeamECServices />
+                            // Synthetic route that exposes the `<Routes fallback>`
+                            // page so the prerender pass can write it to
+                            // `target/site/404.html` for Cloudflare Pages' built-in
+                            // not-found handling. The wildcard fallback isn't part
+                            // of `generate_route_list()`, so leptos_axum has nothing
+                            // to dispatch arbitrary URLs to; this gives us one.
+                            // Kept out of `static_routes()` so no `/_404/index.html`
+                            // is generated.
+                            <Route path=path!("/_404") view=NotFoundPage />
                         </Routes>
                     </main>
                     <Footer />

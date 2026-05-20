@@ -108,7 +108,7 @@ async fn prerender(app: Router, site_root: &Path) {
     }
 
     // 404.html for Cloudflare Pages.
-    let html = render_one(&app, "/__not_found__").await;
+    let html = render_one(&app, "/_404").await;
     let out = site_root.join("404.html");
     fs::write(&out, html).await.expect("write 404.html");
     println!("  (fallback) -> {}", out.display());
@@ -133,7 +133,7 @@ async fn render_one(app: &Router, url: &str) -> String {
         .unwrap_or_else(|e| panic!("read body {url}: {e}"));
     let html = String::from_utf8(bytes.to_vec()).unwrap_or_else(|e| panic!("utf8 {url}: {e}"));
 
-    if !status.is_success() && url != "/__not_found__" {
+    if !status.is_success() && url != "/_404" {
         panic!("non-success status {status} for {url}");
     }
     html
