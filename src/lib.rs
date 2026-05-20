@@ -24,7 +24,7 @@ use leptos_router::components::*;
 use leptos_router::path;
 
 pub mod components;
-mod data;
+pub mod data;
 mod pages;
 
 use crate::pages::announcements::{AnnouncementDetailPage, AnnouncementsPage};
@@ -78,8 +78,8 @@ pub fn Shell(options: LeptosOptions) -> impl IntoView {
                 <link
                     rel="preload"
                     href="/fonts/geist-latin.woff2"
-                    as_="font"
-                    type_="font/woff2"
+                    r#as="font"
+                    r#type="font/woff2"
                     crossorigin="anonymous"
                 />
                 <AutoReload options=options.clone() />
@@ -107,7 +107,7 @@ pub fn App() -> impl IntoView {
         />
 
         <ThemeProvider>
-            <Router base="/">
+            <Router>
                 <div class="flex flex-col min-h-screen w-full bg-surface-page text-ink-primary">
                     <NavBar />
                     <main class="flex-1 w-full">
@@ -140,4 +140,33 @@ pub fn App() -> impl IntoView {
 pub fn hydrate() {
     console_error_panic_hook::set_once();
     leptos::mount::hydrate_body(App);
+}
+
+/// Every URL that the prerender pass should emit as a static HTML
+/// file. Includes the 11 fixed routes plus one entry per
+/// announcement slug so `/announcements/<slug>` permalinks render
+/// without a runtime server.
+///
+/// Kept in this crate (instead of the prerender bin) so the source
+/// of truth lives next to the route table in [`App`] and the
+/// announcement list in [`data::announcements`].
+#[cfg(feature = "ssr")]
+pub fn static_routes() -> Vec<String> {
+    let mut routes = vec![
+        "/".to_string(),
+        "/projects".to_string(),
+        "/getting-started".to_string(),
+        "/community".to_string(),
+        "/announcements".to_string(),
+        "/boot-firmware".to_string(),
+        "/embedded-controller".to_string(),
+        "/windows-ec-services".to_string(),
+        "/team-patina".to_string(),
+        "/team-ec".to_string(),
+        "/team-ec-services".to_string(),
+    ];
+    for a in data::announcements::ANNOUNCEMENTS {
+        routes.push(format!("/announcements/{}", a.slug));
+    }
+    routes
 }
