@@ -31,8 +31,21 @@ const publicDir = path.join(root, 'public');
 const cssIn = path.join(root, 'style', 'main.css');
 const cssOut = path.join(siteDir, 'odp.css');
 
-async function rmrf(p) {
-    await fsp.rm(p, { recursive: true, force: true });
+async function cleanContents(p) {
+    // Remove entries *inside* `p` but leave `p` itself in place.
+    // Windows holds a directory lock when a process has it as cwd
+    // (e.g. `python -m http.server` from `target/site/` during a
+    // local preview), which makes `rm -rf target/site` fail with
+    // EBUSY halfway through and leaves a half-cleaned tree behind.
+    // Cleaning contents only is enough — copy + minify steps below
+    // overwrite anything we still care about.
+    if (!fs.existsSync(p)) {
+        await fsp.mkdir(p, { recursive: true });
+        return;
+    }
+    for (const entry of await fsp.readdir(p)) {
+        await fsp.rm(path.join(p, entry), { recursive: true, force: true });
+    }
 }
 
 async function copyDir(src, dst) {
@@ -85,8 +98,7 @@ async function minifyJsInPlace(file) {
 }
 
 (async () => {
-    await rmrf(siteDir);
-    await fsp.mkdir(siteDir, { recursive: true });
+    await cleanContents(siteDir);
     await copyDir(publicDir, siteDir);
     await minifyCss();
     await minifyJsInPlace(path.join(siteDir, 'interactive.js'));
