@@ -1,8 +1,12 @@
 {
   "ci": {
     "collect": {
-      "staticDistDir": "dist",
-      "url": ["http://localhost/index.html"],
+      "staticDistDir": "target/site",
+      "url": [
+        "http://localhost/index.html",
+        "http://localhost/projects/index.html",
+        "http://localhost/announcements/index.html"
+      ],
       "numberOfRuns": 3
     },
     "upload": {

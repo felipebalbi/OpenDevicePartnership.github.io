@@ -93,8 +93,11 @@ jobs:
         with:
           key: clippy
 
-      - name: Run cargo clippy
-        run: cargo clippy --target wasm32-unknown-unknown --all-targets --no-deps -- -D warnings
+      - name: Clippy (ssr, native)
+        run: cargo clippy --no-default-features --features ssr --all-targets --no-deps -- -D warnings
+
+      - name: Clippy (hydrate, wasm)
+        run: cargo clippy --no-default-features --features hydrate --target wasm32-unknown-unknown --lib --no-deps -- -D warnings
 
   test:
     name: cargo test
@@ -112,7 +115,7 @@ jobs:
           key: test
 
       - name: Run cargo test
-        run: cargo test --all-targets --no-fail-fast
+        run: cargo test --no-default-features --features ssr --all-targets --no-fail-fast
 
   wasm-test:
     name: wasm-pack test (headless Firefox)
@@ -140,11 +143,13 @@ jobs:
       - name: Run browser tests
         # ubuntu-latest already ships Firefox; geckodriver is auto-fetched
         # by wasm-pack in a version that matches the installed browser.
-        run: wasm-pack test --headless --firefox --test wasm
+        # The `hydrate` feature pulls in wasm-bindgen + the browser-side
+        # leptos bits the tests rely on.
+        run: wasm-pack test --headless --firefox --test wasm -- --no-default-features --features hydrate
 
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -162,16 +167,16 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Install npm dependencies (UnoCSS)
+      - name: Install npm dependencies (UnoCSS + terser)
         run: npm ci
 
-      - name: Install Trunk
-        run: |
-          wget -qO- https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz \
-            | tar -xzf- -C /usr/local/bin
+      - name: Install cargo-leptos
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-leptos@0.3.6
 
-      - name: Build with Trunk
-        run: trunk build --release
+      - name: Build site (cargo-leptos + prerender)
+        run: ./scripts/build.sh
 
       - name: Asset size budget
         # Fails the build if any critical asset exceeds its gzipped budget.
@@ -179,6 +184,7 @@ jobs:
         # routine changes don't trip them, but a careless dependency
         # bump or stylesheet bloat will. Update the budget alongside the
         # change that exceeds it, with a clear justification in the PR.
+        # cargo-leptos hashes filenames; globs match `odp.<hash>.<ext>`.
         run: |
           set -euo pipefail
           fail=0
@@ -187,9 +193,9 @@ jobs:
             local label="$2"
             local budget_kb="$3"
             local file
-            file=$(ls dist/$pattern 2>/dev/null | head -n1 || true)
+            file=$(ls $pattern 2>/dev/null | head -n1 || true)
             if [ -z "$file" ]; then
-              echo "::error::Budget check: no file matching dist/$pattern"
+              echo "::error::Budget check: no file matching $pattern"
               fail=1
               return
             fi
@@ -203,11 +209,11 @@ jobs:
               echo "OK: $label = ${size_kb} KB gz (budget ${budget_kb} KB) -- $file"
             fi
           }
-          check 'odp-*_bg.wasm'       'wasm'             230
-          check 'base-*.css'          'base CSS'           5
-          check 'uno.generated-*.css' 'UnoCSS bundle'     10
-          check 'repo_graph.css'      'repo_graph CSS'     2
-          check 'odp-*.js'            'wasm-bindgen JS'   20
+          check 'target/site/pkg/odp.*.wasm' 'wasm'              250
+          check 'target/site/pkg/odp.*.css'  'CSS bundle'          8
+          check 'target/site/pkg/odp.*.js'   'wasm-bindgen JS'    10
+          check 'target/site/repo_graph.css' 'repo_graph CSS'      2
+          check 'target/site/repo_graph.js'  'repo_graph JS'       3
           if [ "$fail" -ne 0 ]; then
             echo "::error::One or more assets exceeded their size budget."
             exit 1
@@ -218,9 +224,11 @@ jobs:
         # cannot be resolved (missing iconify pack, typo, etc.), which
         # would ship a working build with invisible buttons. Assert that
         # the icons we actually rely on made it into the generated CSS.
+        # Post-cargo-leptos the UnoCSS bundle is concatenated into the
+        # single hashed `odp.<hash>.css`.
         run: |
           set -euo pipefail
-          css=$(ls dist/uno.generated-*.css | head -n1)
+          css=$(ls target/site/pkg/odp.*.css | head -n1)
           required="i-lucide-moon i-lucide-sun i-lucide-menu i-lucide-x i-lucide-arrow-right i-lucide-github i-lucide-play"
           missing=""
           for cls in $required; do
@@ -233,10 +241,34 @@ jobs:
           fi
           echo "OK: all required icon utilities present in $css"
 
+      - name: Prerendered route content checks
+        # Guards against an empty-body regression in the prerender step:
+        # every archetype must contain a known per-page substring.
+        run: |
+          set -euo pipefail
+          fail=0
+          check() {
+            local path="$1"
+            local needle="$2"
+            if ! grep -qF "$needle" "target/site/$path"; then
+              echo "::error::Missing '$needle' in target/site/$path"
+              fail=1
+            else
+              echo "OK: $path contains '$needle'"
+            fi
+          }
+          check 'index.html'                                       'Open Device Partnership'
+          check 'projects/index.html'                              'Projects'
+          check 'community/index.html'                             'Community'
+          check 'announcements/index.html'                         'Announcements'
+          check 'getting-started/index.html'                       'Getting Started'
+          check '404.html'                                         "We couldn't find that page"
+          if [ "$fail" -ne 0 ]; then exit 1; fi
+
   lighthouse:
     name: Lighthouse (mobile, soft)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     # Soft mode: this job MUST NOT block PR merges. It exists to
     # surface regressions in performance / accessibility / SEO / best
     # practices, not to gate them. Once scores stabilize we'll flip
@@ -261,16 +293,16 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Install npm dependencies (UnoCSS)
+      - name: Install npm dependencies (UnoCSS + terser)
         run: npm ci
 
-      - name: Install Trunk
-        run: |
-          wget -qO- https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz \
-            | tar -xzf- -C /usr/local/bin
+      - name: Install cargo-leptos
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-leptos@0.3.6
 
-      - name: Build with Trunk
-        run: trunk build --release
+      - name: Build site (cargo-leptos + prerender)
+        run: ./scripts/build.sh
 
       - name: Install Lighthouse CI
         # ubuntu-latest ships Google Chrome; @lhci/cli discovers it
