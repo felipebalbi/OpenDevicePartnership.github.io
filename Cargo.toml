@@ -80,6 +80,9 @@ bin-features = ["ssr"]
 bin-default-features = false
 lib-features = ["hydrate"]
 lib-default-features = false
+# Aggressively minify shipped assets in release builds.
+js-minify = true
+hash-files = true
 
 [profile.release]
 opt-level = "z"

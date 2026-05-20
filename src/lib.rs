@@ -83,8 +83,8 @@ pub fn Shell(options: LeptosOptions) -> impl IntoView {
                     crossorigin="anonymous"
                 />
                 <AutoReload options=options.clone() />
-                <HydrationScripts options />
-                <link rel="stylesheet" id="leptos" href="/pkg/odp.css" />
+                <HydrationScripts options=options.clone() />
+                <HashedStylesheet options id="leptos" />
                 <MetaTags />
                 <script>{THEME_FLASH_SCRIPT}</script>
             </head>

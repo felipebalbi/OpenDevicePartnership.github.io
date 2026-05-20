@@ -10,22 +10,23 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: interest-cohort=()
 
-# Trunk fingerprints these with a content hash in the filename, so
-# they are safe to cache forever. A new build emits a new hash and
-# index.html points to it; the old hash becomes orphan and aged out.
-/*.wasm
+# cargo-leptos fingerprints these with a content hash in the filename
+# (hash-files=true), so they are safe to cache forever. A new build
+# emits a new hash and index.html points to it; the old hash becomes
+# orphan and aged out.
+/pkg/*.wasm
   Cache-Control: public, max-age=31536000, immutable
 
-/*.css
+/pkg/*.css
   Cache-Control: public, max-age=31536000, immutable
 
-# Matches the wasm-bindgen JS shim (odp-<hash>.js) which is also
-# fingerprinted. Plain repo_graph.js is unhashed and falls through
-# to the default cache (which is fine -- it's tiny).
-/odp-*.js
+# The wasm-bindgen JS shim (pkg/odp.<hash>.js) is also fingerprinted.
+# Plain repo_graph.js (lazy-loaded from the site root) is unhashed
+# and gets its own rule below.
+/pkg/*.js
   Cache-Control: public, max-age=31536000, immutable
 
-# Self-hosted fonts: Trunk copies these as-is (no fingerprint).
+# Self-hosted fonts: cargo-leptos copies these as-is (no fingerprint).
 # Cache for a week and revalidate. If the file ever changes, busting
 # the cache means visitors see a one-week-old font for at most a
 # week; trade-off is acceptable for the perf win.
