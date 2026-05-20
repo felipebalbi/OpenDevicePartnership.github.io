@@ -331,6 +331,25 @@ ol {
     display: none;
 }
 
+/* ThemeToggle renders both icons; show only the one that matches
+ * the *opposite* of the current theme (the icon represents the
+ * theme you'll get if you click). */
+[data-theme="light"] .theme-icon-light,
+[data-theme="dark"] .theme-icon-dark {
+    display: inline-block;
+}
+[data-theme="light"] .theme-icon-dark,
+[data-theme="dark"] .theme-icon-light {
+    display: none;
+}
+
+/* Mobile nav hamburger button renders both icons; the open/close
+ * state is driven by `aria-expanded` on the button. */
+[data-mobile-nav-toggle][aria-expanded="false"] .nav-icon-open,
+[data-mobile-nav-toggle][aria-expanded="true"] .nav-icon-closed {
+    display: none;
+}
+
 /* ---------------- 5. Reduced motion ---------------- */
 @media (prefers-reduced-motion: reduce) {
     *,

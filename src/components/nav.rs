@@ -1,8 +1,12 @@
 //! Navigation chrome: `NavBar`, `MobileDrawer`, `Footer`.
+//!
+//! Pure SSG — no Leptos signals or event listeners are emitted from
+//! these components. The mobile drawer is rendered as static markup
+//! with `data-` hooks; `public/interactive.js` toggles its open
+//! state on hamburger click and ESC press.
 
 use crate::components::media::{BrandIcon, Logo};
 use crate::components::theme::ThemeToggle;
-use leptos::ev;
 use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_location;
@@ -21,20 +25,11 @@ const NAV_LINKS: &[(&str, &str, bool)] = &[
 ];
 
 /// Sticky, slim nav bar with the logo, primary links, theme toggle,
-/// and a "Get involved" CTA. Collapses to a hamburger + drawer on
-/// narrow viewports.
+/// and the GitHub link. Collapses to a hamburger + drawer on narrow
+/// viewports. The hamburger and drawer carry `data-` hooks for the
+/// vanilla-JS toggle in `public/interactive.js`.
 #[component]
 pub fn NavBar() -> impl IntoView {
-    let drawer_open = RwSignal::new(false);
-    let close_drawer = move || drawer_open.set(false);
-
-    // ESC closes the drawer.
-    window_event_listener(ev::keydown, move |e| {
-        if e.key() == "Escape" && drawer_open.get_untracked() {
-            drawer_open.set(false);
-        }
-    });
-
     view! {
         <header class=uno![
             "sticky top-0 z-40 w-full",
@@ -80,33 +75,29 @@ pub fn NavBar() -> impl IntoView {
                     </a>
                     <button
                         type="button"
+                        data-mobile-nav-toggle
                         class=uno![
                             "lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-md",
                             "text-ink-primary hover:bg-surface-sunken",
                             "transition-colors duration-200"
                         ]
-                        aria-label=move || {
-                            if drawer_open.get() { "Close menu" } else { "Open menu" }
-                        }
-                        aria-expanded=move || if drawer_open.get() { "true" } else { "false" }
+                        aria-label="Open menu"
+                        aria-expanded="false"
                         aria-controls="primary-mobile-nav"
-                        on:click=move |_| drawer_open.update(|v| *v = !*v)
                     >
                         <span
-                            class=move || {
-                                if drawer_open.get() {
-                                    uno!("i-lucide-x w-6 h-6 block")
-                                } else {
-                                    uno!("i-lucide-menu w-6 h-6 block")
-                                }
-                            }
+                            class=uno!("i-lucide-menu w-6 h-6 nav-icon-closed")
+                            aria-hidden="true"
+                        ></span>
+                        <span
+                            class=uno!("i-lucide-x w-6 h-6 nav-icon-open")
                             aria-hidden="true"
                         ></span>
                     </button>
                 </div>
             </div>
 
-            <MobileDrawer open=drawer_open close=Callback::new(move |_| close_drawer()) />
+            <MobileDrawer />
         </header>
     }
 }
@@ -168,34 +159,34 @@ fn DesktopLink(href: &'static str, label: &'static str, external: bool) -> impl 
 }
 
 #[component]
-fn MobileDrawer(open: RwSignal<bool>, close: Callback<()>) -> impl IntoView {
+fn MobileDrawer() -> impl IntoView {
     view! {
         <div
+            data-mobile-nav-backdrop
+            hidden
             class=uno![
                 "fixed inset-0 z-30 lg:hidden",
                 "backdrop-blur-md",
                 "transition-opacity duration-200"
             ]
-            style:display=move || if open.get() { "block" } else { "none" }
-            on:click=move |_| close.run(())
             aria-hidden="true"
         ></div>
         <nav
             id="primary-mobile-nav"
             aria-label="Primary"
+            hidden
             class=uno![
                 "fixed top-16 right-0 w-[85vw] max-w-sm z-40 lg:hidden",
                 "bg-surface-raised border-l border-b border-border-subtle",
                 "rounded-bl-lg shadow-elev-3",
-                "p-6 flex flex-col gap-1"
+                "p-6 flex-col gap-1"
             ]
-            style:display=move || if open.get() { "flex" } else { "none" }
         >
             {NAV_LINKS
                 .iter()
                 .copied()
                 .map(|(href, label, external)| {
-                    view! { <MobileLink href=href label=label external=external close=close /> }
+                    view! { <MobileLink href=href label=label external=external /> }
                 })
                 .collect_view()}
         </nav>
@@ -203,7 +194,7 @@ fn MobileDrawer(open: RwSignal<bool>, close: Callback<()>) -> impl IntoView {
 }
 
 #[component]
-fn MobileLink(href: &'static str, label: &'static str, external: bool, close: Callback<()>) -> impl IntoView {
+fn MobileLink(href: &'static str, label: &'static str, external: bool) -> impl IntoView {
     let class = uno!(
         "block w-full px-4 py-3 rounded-md text-body font-medium",
         "text-ink-primary hover:bg-surface-sunken",
@@ -211,20 +202,14 @@ fn MobileLink(href: &'static str, label: &'static str, external: bool, close: Ca
     );
     if external {
         view! {
-            <a
-                href=href
-                target="_blank"
-                rel="noopener noreferrer"
-                class=class
-                on:click=move |_| close.run(())
-            >
+            <a href=href target="_blank" rel="noopener noreferrer" class=class>
                 {label}
             </a>
         }
         .into_any()
     } else {
         view! {
-            <A href=href attr:class=class on:click=move |_| close.run(())>
+            <A href=href attr:class=class>
                 {label}
             </A>
         }

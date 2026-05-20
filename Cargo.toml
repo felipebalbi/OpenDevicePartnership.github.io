@@ -3,86 +3,33 @@ name = "odp"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
 [[bin]]
 name = "odp"
 path = "src/bin/server.rs"
-required-features = ["ssr"]
 
 [dependencies]
 unocss-classes = "2"
 
-# Leptos core: dual-target. The `hydrate` / `ssr` features below
-# decide which side of the build we are on.
-leptos = { version = "0.8.2", default-features = false }
-leptos_meta = { version = "0.8.2", default-features = false }
-leptos_router = { version = "0.8.2", default-features = false }
+# Leptos: server-side only. The site is pure static (SSG) with a
+# small amount of vanilla JS for interactivity (theme toggle, mobile
+# nav, video facade); there is no client-side Leptos runtime, hence
+# no `hydrate` feature and no wasm bundle.
+leptos = { version = "0.8.2", default-features = false, features = ["ssr"] }
+leptos_meta = { version = "0.8.2", default-features = false, features = ["ssr"] }
+leptos_router = { version = "0.8.2", default-features = false, features = ["ssr"] }
+leptos_axum = "0.8.2"
 
-# Hydrate-only deps (browser).
-console_error_panic_hook = { version = "0.1.7", optional = true }
-wasm-bindgen = { version = "0.2.100", optional = true }
-web-sys = { version = "0.3.77", features = ["Storage", "MediaQueryList"], optional = true }
-
-# SSR-only deps (native): a small axum server is required by
-# cargo-leptos so it has something to compile under the `ssr`
-# feature. The same binary also has a `--prerender` mode that walks
-# the route table and writes a pure-static `target/site/`, which is
-# what actually ships to Cloudflare Pages.
-axum = { version = "0.8", optional = true }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"], optional = true }
-tower = { version = "0.5", optional = true }
-tower-http = { version = "0.6", features = ["fs"], optional = true }
-leptos_axum = { version = "0.8.2", optional = true }
-http = { version = "1", optional = true }
+# SSR + prerender stack. The bin renders every route once and writes
+# `target/site/<route>/index.html`; the axum server itself never runs
+# in production.
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs"] }
+http = "1"
 
 [dev-dependencies]
-js-sys = "0.3"
 serde_json = "1"
-wasm-bindgen-futures = "0.4"
-wasm-bindgen-test = "0.3"
-
-[features]
-hydrate = [
-    "leptos/hydrate",
-    "dep:console_error_panic_hook",
-    "dep:wasm-bindgen",
-    "dep:web-sys",
-]
-ssr = [
-    "leptos/ssr",
-    "leptos_meta/ssr",
-    "leptos_router/ssr",
-    "dep:axum",
-    "dep:tokio",
-    "dep:tower",
-    "dep:tower-http",
-    "dep:leptos_axum",
-    "dep:http",
-]
-
-[package.metadata.leptos]
-# cargo-leptos drives the dual build (hydrate wasm + ssr server bin)
-# and the asset/style pipeline. We feed it a single SCSS entry that
-# @uses every CSS file we own; the per-component `repo_graph.css`
-# ships separately as a public asset because it is loaded lazily by
-# `RepositoryGraph` only.
-output-name = "odp"
-site-root = "target/site"
-site-pkg-dir = "pkg"
-style-file = "style/main.css"
-assets-dir = "public"
-site-addr = "127.0.0.1:3000"
-reload-port = 3001
-browserquery = "defaults"
-bin-features = ["ssr"]
-bin-default-features = false
-lib-features = ["hydrate"]
-lib-default-features = false
-# Aggressively minify shipped assets in release builds.
-js-minify = true
-hash-files = true
 
 [profile.release]
 opt-level = "z"

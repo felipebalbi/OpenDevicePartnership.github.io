@@ -1,46 +1,48 @@
-//! ODP website SSR binary.
+//! ODP website prerender binary.
 //!
-//! Plays two roles depending on how it is invoked:
+//! Pure SSG: this binary has no networking role in production. It
+//! walks [`odp::static_routes`], drives an in-process axum router
+//! via [`tower::ServiceExt::oneshot`] (no socket), and writes each
+//! response as a static `target/site/<route>/index.html` file plus
+//! a top-level `404.html` for Cloudflare Pages' built-in not-found
+//! handling.
 //!
-//! * `cargo leptos serve` runs it as a normal axum SSR server with
-//!   live-reload — useful during development to render + hydrate
-//!   the site against the cargo-leptos asset pipeline.
-//! * Invoked with `--prerender`, it walks
-//!   [`odp::static_routes`], drives the same axum router via
-//!   [`tower::ServiceExt::oneshot`] (no socket), and writes each
-//!   response as a static `target/site/<route>/index.html` file
-//!   plus a top-level `404.html` for Cloudflare Pages' built-in
-//!   not-found handling.
-//!
-//! Production deploys only ship the prerender output — the SSR
-//! server itself never runs on the host.
+//! A `serve` mode is kept for local browser previewing of the
+//! prerendered output (`./odp serve`) — it just spins up a static
+//! file server pointed at `target/site/`.
 
 use axum::body::{to_bytes, Body};
 use axum::extract::Request;
 use axum::Router;
-use leptos::config::{get_configuration, LeptosOptions};
+use leptos::config::LeptosOptions;
 use leptos_axum::{generate_route_list, LeptosRoutes};
-use odp::{static_routes, App, Shell, ShellProps};
+use odp::{static_routes, App, Shell};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tower::ServiceExt;
 use tower_http::services::ServeDir;
 
-fn build_router(leptos_options: LeptosOptions) -> Router {
-    let site_root = leptos_options.site_root.to_string();
+const SITE_ROOT: &str = "target/site";
+const SITE_ADDR: &str = "127.0.0.1:3000";
+
+fn leptos_options() -> LeptosOptions {
+    // No cargo-leptos in this branch, so there is no
+    // `[package.metadata.leptos]` table to read. The few fields the
+    // SSG path needs are filled in by hand; everything else falls
+    // back to the type's defaults.
+    let mut opts = LeptosOptions::builder().output_name("odp").site_root(SITE_ROOT).build();
+    opts.site_addr = SITE_ADDR.parse().expect("parse site_addr");
+    opts
+}
+
+fn build_router(opts: LeptosOptions) -> Router {
+    let site_root = opts.site_root.to_string();
     let routes = generate_route_list(App);
 
     Router::new()
-        .leptos_routes(&leptos_options, routes, {
-            let leptos_options = leptos_options.clone();
-            move || {
-                Shell(ShellProps {
-                    options: leptos_options.clone(),
-                })
-            }
-        })
+        .leptos_routes(&opts, routes, Shell)
         .fallback_service(ServeDir::new(site_root))
-        .with_state(leptos_options)
+        .with_state(opts)
 }
 
 #[tokio::main]
@@ -52,15 +54,12 @@ async fn main() {
         Mode::Serve
     };
 
-    let conf = get_configuration(Some("Cargo.toml")).expect("failed to read leptos configuration");
-    let leptos_options = conf.leptos_options;
-    let site_root = PathBuf::from(leptos_options.site_root.to_string());
-    let addr = leptos_options.site_addr;
-
-    let app = build_router(leptos_options);
+    let opts = leptos_options();
+    let site_root = PathBuf::from(opts.site_root.to_string());
+    let addr = opts.site_addr;
+    let app = build_router(opts);
 
     if matches!(mode, Mode::Prerender) {
-        // Diagnostic: show what generate_route_list discovered.
         let listing = generate_route_list(App);
         eprintln!("prerender: generate_route_list returned {} route(s):", listing.len());
         for r in &listing {

@@ -36,9 +36,10 @@ pub fn Logo(#[prop(into, optional)] class: String) -> impl IntoView {
 ///
 /// On first paint we render *zero* third-party assets: just a
 /// styled 16:9 button with our own play affordance and caption.
-/// When the user clicks (or presses Enter / Space on the button)
-/// we swap in a `youtube-nocookie.com` iframe with `autoplay=1`,
-/// so playback starts immediately on their explicit opt-in.
+/// On click, `public/interactive.js` swaps in a
+/// `youtube-nocookie.com` iframe (template stamped via `<template>`
+/// in the same element) with `autoplay=1`, so playback starts
+/// immediately on the user's explicit opt-in.
 ///
 /// This protects first-paint perf (the live YouTube player pulls
 /// ~hundreds of KB of JS) and avoids any request to Google domains
@@ -53,9 +54,8 @@ pub fn VideoFacade(
     #[prop(into)]
     title: String,
 ) -> impl IntoView {
-    let playing = RwSignal::new(false);
-    let title_for_button = title.clone();
     let aria_label = format!("Play video: {title}");
+    let caption = title.clone();
 
     let iframe_html = {
         let id = escape_attr(&youtube_id);
@@ -73,46 +73,36 @@ pub fn VideoFacade(
     };
 
     view! {
-        <div class=uno!(
-            "aspect-video w-full overflow-hidden rounded-lg border border-border-subtle bg-surface-sunken shadow-elev-1"
-        )>
-            <Show
-                when=move || playing.get()
-                fallback=move || {
-                    let label = aria_label.clone();
-                    let caption = title_for_button.clone();
-                    view! {
-                        <button
-                            type="button"
-                            aria-label=label
-                            on:click=move |_| playing.set(true)
-                            class=uno!(
-                                "group relative w-full h-full flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-surface-sunken to-surface-raised text-ink-primary cursor-pointer focus-visible:(outline-2 outline-offset-2 outline-ink-accent) transition-colors hover:(bg-gradient-to-br from-surface-raised to-surface-sunken)"
-                            )
-                        >
-                            <span class=uno!(
-                                "flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-ink-accent text-ink-inverse shadow-elev-2 transition-transform group-hover:scale-110"
-                            )>
-                                <span
-                                    class="i-lucide-play w-7 h-7 md:w-9 md:h-9 translate-x-0.5"
-                                    aria-hidden="true"
-                                ></span>
-                            </span>
-                            <span class=uno!(
-                                "text-caption font-mono uppercase tracking-[0.18em] text-ink-secondary"
-                            )>"Watch the intro"</span>
-                            <span class=uno!(
-                                "text-h3 font-semibold max-w-[24ch] text-center px-6"
-                            )>{caption}</span>
-                        </button>
-                    }
-                }
+        <div
+            data-video-facade
+            class=uno!(
+                "aspect-video w-full overflow-hidden rounded-lg border border-border-subtle bg-surface-sunken shadow-elev-1"
+            )
+        >
+            <button
+                type="button"
+                data-video-play
+                aria-label=aria_label
+                class=uno!(
+                    "group relative w-full h-full flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-surface-sunken to-surface-raised text-ink-primary cursor-pointer focus-visible:(outline-2 outline-offset-2 outline-ink-accent) transition-colors hover:(bg-gradient-to-br from-surface-raised to-surface-sunken)"
+                )
             >
-                {
-                    let html = iframe_html.clone();
-                    view! { <div class=uno!("w-full h-full") inner_html=html></div> }
-                }
-            </Show>
+                <span class=uno!(
+                    "flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-ink-accent text-ink-inverse shadow-elev-2 transition-transform group-hover:scale-110"
+                )>
+                    <span
+                        class="i-lucide-play w-7 h-7 md:w-9 md:h-9 translate-x-0.5"
+                        aria-hidden="true"
+                    ></span>
+                </span>
+                <span class=uno!(
+                    "text-caption font-mono uppercase tracking-[0.18em] text-ink-secondary"
+                )>"Watch the intro"</span>
+                <span class=uno!(
+                    "text-h3 font-semibold max-w-[24ch] text-center px-6"
+                )>{caption}</span>
+            </button>
+            <template data-video-iframe inner_html=iframe_html></template>
         </div>
     }
 }

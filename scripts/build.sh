@@ -1,20 +1,15 @@
 #!/usr/bin/env bash
-# Production build pipeline for the ODP website.
+# Production build pipeline for the ODP website (pure SSG, no wasm).
 #
-# Steps (in order; each must succeed):
-#   1. npm ci                       -- pin Node deps for the CSS pipeline
-#   2. npm run build:css            -- UnoCSS scan + concat into style/main.css
-#   3. cargo leptos build --release -- hydrate wasm + SSR axum bin + asset hash
-#   4. npm run postbuild            -- minify lazy JS, strip .d.ts from /pkg/
-#   5. ./target/release/odp --prerender
-#                                   -- walk every route, write static HTML
+# Output: target/site/  (deploy this directory to Cloudflare Pages)
 #
-# Output: a fully-static, deploy-ready site tree at target/site/.
-# Intended consumers: scripts/release.sh, the Cloudflare Pages deploy
-# workflow, and contributors who want a one-shot local rebuild.
-
+# Steps:
+#   1. npm ci                 install JS toolchain
+#   2. npm run build:css      UnoCSS scan + concat into style/main.css
+#   3. cargo build --release  build the prerender binary
+#   4. npm run build:assets   clean + copy public/* + minify css/js
+#   5. ./target/release/odp --prerender   write per-route index.html
 set -euo pipefail
-
 cd "$(dirname "$0")/.."
 
 echo "==> 1/5  npm ci"
@@ -23,11 +18,11 @@ npm ci
 echo "==> 2/5  npm run build:css"
 npm run build:css
 
-echo "==> 3/5  cargo leptos build --release"
-cargo leptos build --release
+echo "==> 3/5  cargo build --release --bin odp"
+cargo build --release --bin odp
 
-echo "==> 4/5  npm run postbuild"
-npm run postbuild
+echo "==> 4/5  npm run build:assets"
+npm run build:assets
 
 echo "==> 5/5  prerender all routes"
 ./target/release/odp --prerender

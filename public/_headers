@@ -3,54 +3,40 @@
 # See https://developers.cloudflare.com/pages/configuration/headers/
 
 # Default headers for every response. Light security hardening; no
-# CSP yet because the d3 CDN script is loaded dynamically and would
-# need to be allow-listed.
+# CSP yet because we inject inline scripts (theme-flash + the
+# RepositoryGraph payload) that would need to be allow-listed.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: interest-cohort=()
 
-# cargo-leptos fingerprints these with a content hash in the filename
-# (hash-files=true), so they are safe to cache forever. A new build
-# emits a new hash and index.html points to it; the old hash becomes
-# orphan and aged out.
-/pkg/*.wasm
-  Cache-Control: public, max-age=31536000, immutable
-
-/pkg/*.css
-  Cache-Control: public, max-age=31536000, immutable
-
-# The wasm-bindgen JS shim (pkg/odp.<hash>.js) is also fingerprinted.
-# Plain repo_graph.js (lazy-loaded from the site root) is unhashed
-# and gets its own rule below.
-/pkg/*.js
-  Cache-Control: public, max-age=31536000, immutable
-
-# Self-hosted fonts: cargo-leptos copies these as-is (no fingerprint).
-# Cache for a week and revalidate. If the file ever changes, busting
-# the cache means visitors see a one-week-old font for at most a
-# week; trade-off is acceptable for the perf win.
+# Self-hosted fonts: rarely change; cache for a week and revalidate.
 /fonts/*.woff2
   Cache-Control: public, max-age=604800, must-revalidate
 
-# Images are not fingerprinted but rarely change. Same trade-off.
+# Images: not fingerprinted but rarely change. Same trade-off.
 /images/*
   Cache-Control: public, max-age=604800, must-revalidate
 
-# index.html and the data/* JSON must always be revalidated so a
-# fresh deploy is picked up immediately.
-/
-  Cache-Control: public, max-age=0, must-revalidate
+# Stylesheet and JS are NOT content-hashed in this no-wasm branch
+# (we dropped cargo-leptos's asset pipeline). Cache for a week and
+# revalidate so a deploy is picked up within at most a week.
+/odp.css
+  Cache-Control: public, max-age=604800, must-revalidate
 
-/index.html
-  Cache-Control: public, max-age=0, must-revalidate
+/interactive.js
+  Cache-Control: public, max-age=604800, must-revalidate
 
-# repo_graph.{js,css} are NOT fingerprinted (they're injected at
-# runtime by RepositoryGraph and ship to dist root via copy-file).
-# Cache for a week and revalidate -- a stale window of one week is
-# acceptable for the project graph code.
 /repo_graph.js
   Cache-Control: public, max-age=604800, must-revalidate
 
 /repo_graph.css
   Cache-Control: public, max-age=604800, must-revalidate
+
+# HTML must always be revalidated so a fresh deploy is picked up
+# immediately.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
