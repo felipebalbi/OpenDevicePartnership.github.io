@@ -10,8 +10,8 @@
     width: 100%;
     height: 100vh;
     /* Sunken surface (matches --color-surface-sunken in base.css). */
-    background: light-dark(#f5e9cb, #251a0f);
-    color: light-dark(#484431, #e8e4b1);
+    background: light-dark(#ecebe7, #101218);
+    color: light-dark(#14161c, #ecedf2);
 }
 
 #zoom-controls {
@@ -26,11 +26,11 @@
 #zoom-controls button {
     width: 40px;
     height: 40px;
-    border: 1px solid light-dark(#c5baa6, #6f5f58);
-    background: light-dark(#fffbeb, #483426);
-    color: light-dark(#484431, #e8e4b1);
+    border: 1px solid light-dark(#d9d8d3, #2a2d37);
+    background: light-dark(#ffffff, #1d1f29);
+    color: light-dark(#14161c, #ecedf2);
     border-radius: 5px;
-    box-shadow: 0 2px 5px light-dark(rgba(72, 68, 49, 0.18), rgba(0, 0, 0, 0.45));
+    box-shadow: 0 2px 5px light-dark(rgba(20, 22, 28, 0.18), rgba(0, 0, 0, 0.45));
     cursor: pointer;
     font-size: 18px;
     display: flex;
@@ -39,7 +39,7 @@
 }
 
 #zoom-controls button:hover {
-    background: light-dark(#f5e9cb, #59463f);
+    background: light-dark(#ecebe7, #2a2d37);
 }
 
 .repository-graph .node {
@@ -49,11 +49,11 @@
 .repository-graph .link {
     fill: none;
     /* Muted ink so the lines recede behind the nodes. */
-    stroke: light-dark(#6f6a52, #a8a585);
+    stroke: light-dark(#5e616b, #8d909a);
     stroke-width: 2;
 }
 
 .repository-graph .column-headers text {
     font-family: Arial, sans-serif;
-    fill: light-dark(#484431, #e8e4b1);
+    fill: light-dark(#14161c, #ecedf2);
 }
