@@ -26,23 +26,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4 # repo checkout
 
-      # Install Rust Nightly Toolchain, with Clippy & Rustfmt
-      - name: Install nightly Rust
-        uses: dtolnay/rust-toolchain@nightly
+      # Install stable Rust + the wasm32 target. cargo-leptos handles
+      # the hydrate-side wasm build itself but needs the target
+      # installed in the toolchain.
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-
-      - name: Add WASM target
-        run: rustup target add wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
 
       - name: lint
         run: |
-          cargo clippy -- -D warnings
+          cargo clippy --all-features -- -D warnings
           cargo fmt --check
-
-      # If using tailwind...
-      # - name: Download and install tailwindcss binary
-      #   run: npm install -D tailwindcss && npx tailwindcss -i <INPUT/PATH.css> -o <OUTPUT/PATH.css>  # run tailwind
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -50,31 +46,27 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Install npm dependencies (UnoCSS)
-        run: npm ci
+      # cargo-leptos drives the full SSR + hydrate dual-build and the
+      # asset hashing/minification pipeline. Pinned to match the
+      # version contributors install locally.
+      - name: Install cargo-leptos
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-leptos@0.3.6
 
-      - name: Download and install Trunk binary
-        run: wget -qO- https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf-
+      # One-shot production build: npm ci -> CSS pipeline ->
+      # cargo leptos build --release -> postbuild (minify lazy JS,
+      # drop .d.ts) -> prerender every route to target/site/.
+      - name: Build static site
+        run: ./scripts/build.sh
 
-      - name: Build with Trunk
-        # "${GITHUB_REPOSITORY#*/}" evaluates into the name of the repository
-        # using --public-url something will allow trunk to modify all the href
-        # paths like from favicon.ico to repo_name/favicon.ico .  this is
-        # necessary for github pages where the site is deployed to
-        # username.github.io/repo_name and all files must be requested
-        # relatively as favicon.ico. if we skip public-url option, the href
-        # paths will instead request username.github.io/favicon.ico which will
-        # obviously return error 404 not found.
-        run: ./trunk build --release
-
-
-      # Deploy
+      # Deploy the prerendered tree.
       - name: Publish to Cloudflare Pages
         uses: cloudflare/pages-action@v1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           projectName: ${{ secrets.CLOUDFLARE_PROJECT_NAME }}
-          directory: './dist'
+          directory: './target/site'
           # Optional: Enable this if you want to have GitHub Deployments triggered
           # gitHubToken: ${{ secrets.GH_TOKEN }}
