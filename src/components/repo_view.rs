@@ -1,12 +1,12 @@
 //! Renders the repository dependency graph using D3 v7.
 //!
 //! All heavy lifting (force simulation, zoom controls, drag handlers,
-//! styles) lives in two static assets that Trunk copies next to the
-//! Wasm bundle:
+//! styles) lives in two static assets that cargo-leptos copies next
+//! to the wasm bundle:
 //!
 //!  * `public/repo_graph.js`  -- defines `window.__odpRenderGraph()`
 //!    and self-loads D3 on demand.
-//!  * `style/repo_graph.css`  -- the graph styles.
+//!  * `public/repo_graph.css` -- the graph styles.
 //!
 //! Both assets are loaded **lazily**, only when a `RepositoryGraph`
 //! component first mounts (i.e. when the user navigates to a project
@@ -28,23 +28,40 @@
 //!
 //! Subsequent route changes just publish fresh data + call render
 //! synchronously -- no more script injection or downloads.
+//!
+//! Under SSR (prerender) the Effect never runs, so the component
+//! renders just the empty `<svg>` shell. The hydrate-side Effect
+//! takes over once wasm boots in the browser.
 
 use leptos::prelude::*;
+#[cfg(feature = "hydrate")]
 use wasm_bindgen::{JsCast, JsValue};
+#[cfg(feature = "hydrate")]
 use web_sys::js_sys;
 
+#[cfg(feature = "hydrate")]
 const REPO_GRAPH_SCRIPT_ID: &str = "odp-repo-graph-script";
+#[cfg(feature = "hydrate")]
 const REPO_GRAPH_SCRIPT_SRC: &str = "/repo_graph.js";
+#[cfg(feature = "hydrate")]
 const REPO_GRAPH_STYLE_ID: &str = "odp-repo-graph-style";
+#[cfg(feature = "hydrate")]
 const REPO_GRAPH_STYLE_HREF: &str = "/repo_graph.css";
 
 #[component]
 pub fn RepositoryGraph(#[prop(into)] nodes: String, #[prop(into)] links: String) -> impl IntoView {
-    Effect::new(move |_| {
-        publish_graph_data(&nodes, &links);
-        request_render();
-        ensure_graph_assets();
+    // The Effect is a no-op under SSR (effects do not run); under
+    // hydrate it publishes per-page data and lazy-loads the D3
+    // pipeline on first mount.
+    Effect::new({
+        let nodes = nodes.clone();
+        let links = links.clone();
+        move |_| {
+            run_graph_effect(&nodes, &links);
+        }
     });
+    // Silence "unused under ssr" lints without changing the API.
+    let _ = (&nodes, &links);
 
     view! {
         <div class="repository-graph">
@@ -58,9 +75,20 @@ pub fn RepositoryGraph(#[prop(into)] nodes: String, #[prop(into)] links: String)
     }
 }
 
+#[cfg(feature = "hydrate")]
+fn run_graph_effect(nodes_json: &str, links_json: &str) {
+    publish_graph_data(nodes_json, links_json);
+    request_render();
+    ensure_graph_assets();
+}
+
+#[cfg(not(feature = "hydrate"))]
+fn run_graph_effect(_nodes_json: &str, _links_json: &str) {}
+
 /// Parses the per-page node/link JSON via the browser's native
 /// `JSON.parse` and stores the result on `window.__odpGraphData`.
 /// Silently no-ops if either string is not valid JSON.
+#[cfg(feature = "hydrate")]
 fn publish_graph_data(nodes_json: &str, links_json: &str) {
     let Some(window) = web_sys::window() else {
         return;
@@ -80,6 +108,7 @@ fn publish_graph_data(nodes_json: &str, links_json: &str) {
 /// in which case this is a no-op and `repo_graph.js` will self-render
 /// once it loads (it checks for `__odpGraphData` at the end of its
 /// IIFE).
+#[cfg(feature = "hydrate")]
 fn request_render() {
     let Some(window) = web_sys::window() else {
         return;
@@ -96,6 +125,7 @@ fn request_render() {
 /// into `<head>` exactly once per session. Subsequent calls are cheap
 /// no-ops. Both assets are kept off the critical path so the landing
 /// page (and every non-project route) never pays for them.
+#[cfg(feature = "hydrate")]
 fn ensure_graph_assets() {
     let Some(window) = web_sys::window() else {
         return;

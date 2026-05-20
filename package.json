@@ -4,8 +4,8 @@
   "private": true,
   "description": "UnoCSS build pipeline for the ODP website. Trunk's pre-build hook (see Trunk.toml [[hooks]]) runs `npm run build:css` to scan src/**/*.rs for uno![...] macro invocations and emit style/uno.generated.css.",
   "scripts": {
-    "build:css": "unocss --config unocss.config.ts --out-file style/uno.generated.css \"src/**/*.rs\" \"index.html\"",
-    "watch:css": "unocss --config unocss.config.ts --out-file style/uno.generated.css --watch \"src/**/*.rs\" \"index.html\""
+    "build:css": "unocss --config unocss.config.ts --out-file style/uno.generated.css \"src/**/*.rs\" && node scripts/concat-css.js",
+    "watch:css": "unocss --config unocss.config.ts --out-file style/uno.generated.css --watch \"src/**/*.rs\""
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.0",

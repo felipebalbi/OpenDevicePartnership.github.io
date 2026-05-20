@@ -1,9 +1,20 @@
 //! ODP website root.
 //!
-//! The page chrome (sticky `NavBar`, `Footer`, theme provider) is
-//! rendered once around the route tree. Individual pages render
-//! only their content; vertical rhythm is handled by the
-//! `<Section>` primitives inside each page.
+//! Built as a dual-target crate by cargo-leptos:
+//!
+//!   * The `hydrate` feature compiles to wasm and ships in
+//!     `target/site/pkg/odp.{js,wasm}`. The `hydrate` entry below
+//!     attaches Leptos to a pre-rendered DOM.
+//!   * The `ssr` feature compiles to a native binary
+//!     (`src/bin/server.rs`) used for `cargo leptos serve` in dev
+//!     and for the static prerender pass that produces the files
+//!     deployed to Cloudflare Pages.
+//!
+//! The [`shell`] component renders the full `<!DOCTYPE html>` +
+//! `<html>` shell once per request / per prerendered file, then
+//! mounts [`App`] inside `<body>`. Page chrome (sticky `NavBar`,
+//! `Footer`, theme provider) is rendered once around the route
+//! tree by `App`; individual pages render only their content.
 
 use crate::components::nav::{Footer, NavBar};
 use crate::components::theme::ThemeProvider;
@@ -29,15 +40,67 @@ use crate::pages::team_ec_services::TeamECServices;
 use crate::pages::team_patina::TeamPatina;
 use crate::pages::unified_ec_services::WindowsEcServices;
 
+/// Inline `<head>` script that resolves the active theme before
+/// any CSS loads. Eliminates the first-paint flash that would
+/// otherwise occur while the hydrate wasm bundle boots and runs
+/// `ThemeProvider`'s effect.
+///
+/// Resolution order matches `components::theme::read_initial_theme`:
+/// localStorage > prefers-color-scheme > "light".
+const THEME_FLASH_SCRIPT: &str = r#"
+(function () {
+  try {
+    var key = 'odp-theme';
+    var stored = window.localStorage && window.localStorage.getItem(key);
+    var t = stored === 'dark' || stored === 'light'
+      ? stored
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+  } catch (_) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+})();
+"#;
+
+/// Top-level HTML shell rendered by cargo-leptos's SSR pipeline
+/// (and by our prerender bin).
+#[component]
+pub fn Shell(options: LeptosOptions) -> impl IntoView {
+    view! {
+        <!DOCTYPE html>
+        <html lang="en" dir="ltr">
+            <head>
+                <meta charset="UTF-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                <link rel="icon" href="/images/odpicon.ico" type="image/x-icon" />
+                <link
+                    rel="preload"
+                    href="/fonts/geist-latin.woff2"
+                    as_="font"
+                    type_="font/woff2"
+                    crossorigin="anonymous"
+                />
+                <AutoReload options=options.clone() />
+                <HydrationScripts options />
+                <link rel="stylesheet" id="leptos" href="/pkg/odp.css" />
+                <MetaTags />
+                <script>{THEME_FLASH_SCRIPT}</script>
+            </head>
+            <body>
+                <App />
+            </body>
+        </html>
+    }
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
 
     view! {
-        <Html attr:lang="en" attr:dir="ltr" />
         <Title text="Open Device Partnership" />
-        <Meta charset="UTF-8" />
-        <Meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <Meta
             name="description"
             content="Open Device Partnership: an open collaboration for secure, modern device firmware. Built in the open, by the people who maintain it."
@@ -68,4 +131,13 @@ pub fn App() -> impl IntoView {
             </Router>
         </ThemeProvider>
     }
+}
+
+/// Hydrate entry point. Called automatically when the wasm module
+/// loads in the browser (via `#[wasm_bindgen(start)]`).
+#[cfg(feature = "hydrate")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn hydrate() {
+    console_error_panic_hook::set_once();
+    leptos::mount::hydrate_body(App);
 }

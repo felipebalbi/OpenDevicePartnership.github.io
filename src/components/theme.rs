@@ -10,6 +10,12 @@
 //!   2. `prefers-color-scheme: dark` from the OS,
 //!   3. fallback to `light`.
 //!
+//! Under SSR the resolution is deferred to a tiny inline script in
+//! the `<head>` (see `crate::THEME_FLASH_SCRIPT`); this module just
+//! seeds the signal with the safe default `Light`. Once the wasm
+//! bundle hydrates, the effect below mirrors the live signal back
+//! into `<html data-theme>` and `localStorage`.
+//!
 //! The toggle button cycles `light <-> dark`, persists the choice in
 //! `localStorage`, and updates `<html data-theme=...>` so CSS picks
 //! up the change without a re-render.
@@ -17,8 +23,10 @@
 use leptos::ev;
 use leptos::prelude::*;
 use unocss_classes::uno;
+#[cfg(feature = "hydrate")]
 use web_sys::window;
 
+#[cfg(feature = "hydrate")]
 const STORAGE_KEY: &str = "odp-theme";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -28,6 +36,7 @@ pub enum Theme {
 }
 
 impl Theme {
+    #[cfg(feature = "hydrate")]
     fn as_attr(self) -> &'static str {
         match self {
             Theme::Light => "light",
@@ -44,6 +53,11 @@ impl Theme {
 }
 
 /// Resolve the initial theme from localStorage / OS preference.
+///
+/// SSR rendering has no window; the inline `THEME_FLASH_SCRIPT`
+/// sets `data-theme` on the client before CSS loads, and the
+/// hydrate-side effect re-syncs once the signal is live.
+#[cfg(feature = "hydrate")]
 fn read_initial_theme() -> Theme {
     let Some(window) = window() else {
         return Theme::Light;
@@ -67,6 +81,12 @@ fn read_initial_theme() -> Theme {
     Theme::Light
 }
 
+#[cfg(not(feature = "hydrate"))]
+fn read_initial_theme() -> Theme {
+    Theme::Light
+}
+
+#[cfg(feature = "hydrate")]
 fn apply_theme(theme: Theme) {
     let Some(window) = window() else { return };
     let Some(document) = window.document() else {
@@ -81,6 +101,9 @@ fn apply_theme(theme: Theme) {
         let _ = storage.set_item(STORAGE_KEY, theme.as_attr());
     }
 }
+
+#[cfg(not(feature = "hydrate"))]
+fn apply_theme(_theme: Theme) {}
 
 /// Reactive theme state shared via Leptos context. Components that
 /// need to react to theme changes (e.g. theme-aware logos) can call
